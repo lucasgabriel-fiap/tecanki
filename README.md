@@ -2,6 +2,9 @@
 
 Automação para criar cards no Anki a partir de questões do TEC Concursos.
 
+## 🎥 Demonstração
+[![Assista no YouTube](https://img.shields.io/badge/▶️_Assista_no_YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=Vzo3VwG3rps)
+
 ## Descrição
 
 O TECANKI é um bot que captura questões e comentários do site TEC Concursos e cria automaticamente flashcards no Anki, facilitando seus estudos para concursos públicos.
