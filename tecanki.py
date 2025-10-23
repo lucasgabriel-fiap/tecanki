@@ -481,8 +481,7 @@ def exibir_titulo():
     """Exibe título do programa"""
     console.print(Panel.fit(
         "[bold cyan]🤖 ANKI BOT - TEC CONCURSOS[/bold cyan]\n"
-        "[bold green]✨ VERSÃO CORRIGIDA - EXTRAÇÃO PERFEITA ✨[/bold green]\n"
-        "[dim]Usando lógica do x.py que funciona 100%[/dim]",
+        "[bold green]✨ VERSÃO CORRIGIDA - EXTRAÇÃO PERFEITA ✨[/bold green]\n",
         border_style="cyan"
     ))
 
