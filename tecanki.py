@@ -480,9 +480,8 @@ class NavegadorTEC:
 def exibir_titulo():
     """Exibe título do programa"""
     console.print(Panel.fit(
-        "[bold cyan]🤖 ANKI BOT - TEC CONCURSOS[/bold cyan]\n"
-        "[bold green]✨ VERSÃO CORRIGIDA - EXTRAÇÃO PERFEITA ✨[/bold green]\n"
-        "[dim]Usando lógica do x.py que funciona 100%[/dim]",
+        "[bold cyan]🤖 TECANKI - TEC CONCURSOS[/bold cyan]\n"
+        "[dim]Automação para Anki[/dim]",
         border_style="cyan"
     ))
 
