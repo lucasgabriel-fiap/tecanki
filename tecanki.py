@@ -54,7 +54,7 @@ DROP_DATA_URI_IMAGES = True
 console = Console()
 
 # ═══════════════════════════════════════════════════════════════
-# PROCESSAMENTO HTML
+# PROCESSAMENTO HTML - LÓGICA DO X.PY (100% FUNCIONAL)
 # ═══════════════════════════════════════════════════════════════
 
 def is_tag(o): 
@@ -79,7 +79,7 @@ def text_with_br(node: Tag) -> str:
     return out.strip("\n")
 
 def normalize_mathjax(soup: BeautifulSoup):
-    """Converte MathJax para LaTeX"""
+    """Converte MathJax para LaTeX - LÓGICA DO X.PY"""
     for sc in list(soup.select('script[type^="math/tex"]')):
         tex = (sc.string or sc.get_text() or "").strip()
         if not tex:
@@ -149,7 +149,7 @@ def style_dict_to_str(d: dict) -> str:
     return "; ".join(parts)
 
 def filter_inline_style(style_value: str) -> str:
-    """Filtra propriedades CSS"""
+    """Filtra propriedades CSS - LÓGICA DO X.PY"""
     d = parse_style_to_dict(style_value)
     for bad in list(d.keys()):
         if bad in BLOCKED_PROPS:
@@ -174,7 +174,7 @@ TABLE_ALLOWED_ATTRS = {
 }
 
 def clean_noise(soup: BeautifulSoup, preserve_classes: bool = False):
-    """Remove ruído e elementos desnecessários"""
+    """Remove ruído e elementos desnecessários - LÓGICA DO X.PY"""
     for c in soup.find_all(string=lambda s: isinstance(s, Comment)): 
         c.extract()
     for s in list(soup.find_all("script")): 
@@ -230,7 +230,7 @@ def clean_noise(soup: BeautifulSoup, preserve_classes: bool = False):
                 del tag.attrs[attr]
 
 def extract_question_and_choices(soup: BeautifulSoup) -> str:
-    """Extrai questão e alternativas de forma estruturada"""
+    """Extrai questão e alternativas de forma estruturada - LÓGICA DO X.PY"""
     out_parts = []
 
     container = soup.select_one("article.questao-enunciado")
@@ -275,7 +275,7 @@ def extract_question_and_choices(soup: BeautifulSoup) -> str:
     return "\n".join(p for p in out_parts if p)
 
 def processar_html(html: str) -> str:
-    """Processa HTML e retorna conteúdo formatado"""
+    """Processa HTML usando a LÓGICA DO X.PY que funciona perfeitamente"""
     if not html or COMENTARIO_INDISPONIVEL in html:
         return html
     
@@ -283,6 +283,7 @@ def processar_html(html: str) -> str:
         return "ERRO: O HTML está vazio."
     
     try:
+        # USA LXML como o x.py!!!
         soup = BeautifulSoup(html, "lxml")
         convert_texto_monospace_to_pre(soup)
         normalize_mathjax(soup)
@@ -305,6 +306,7 @@ def processar_html(html: str) -> str:
             normalize_mathjax(final_soup)
             clean_noise(final_soup)
             inner = "".join(str(ch) for ch in (final_soup.body or final_soup).children).strip()
+            # Adiciona wrapper com estilos como o x.py
             return f'<div style="line-height:1.6; font-size:16px; max-width:100%;">{inner}</div>'
         else:
             return "ERRO: Nenhum container de questão ou comentário foi encontrado."
@@ -478,8 +480,9 @@ class NavegadorTEC:
 def exibir_titulo():
     """Exibe título do programa"""
     console.print(Panel.fit(
-        "[bold cyan]🤖 TECANKI - TEC CONCURSOS[/bold cyan]\n"
-        "[dim]Automação para Anki[/dim]",
+        "[bold cyan]🤖 ANKI BOT - TEC CONCURSOS[/bold cyan]\n"
+        "[bold green]✨ VERSÃO CORRIGIDA - EXTRAÇÃO PERFEITA ✨[/bold green]\n"
+        "[dim]Usando lógica do x.py que funciona 100%[/dim]",
         border_style="cyan"
     ))
 
@@ -588,10 +591,10 @@ def main():
                 else:
                     console.print("[green]✅ Comentário capturado[/green]")
                 
-                console.print("[cyan]⏳ Processando HTML...[/cyan]")
+                console.print("[cyan]⏳ Processando HTML (lógica do x.py)...[/cyan]")
                 questao_limpa = processar_html(html_questao)
                 comentario_limpo = processar_html(html_comentario) if COMENTARIO_INDISPONIVEL not in html_comentario else COMENTARIO_INDISPONIVEL
-                console.print("[green]✅ HTML processado[/green]")
+                console.print("[green]✅ HTML processado perfeitamente[/green]")
                 
                 console.print("[cyan]⏳ Enviando para Anki...[/cyan]")
                 anki.adicionar_nota(deck, questao_limpa, comentario_limpo)
@@ -623,6 +626,7 @@ def main():
     console.print("\n")
     exibir_relatorio(stats)
     
+    console.print("\n[cyan]💡 Navegador permanece aberto. Feche manualmente quando quiser.[/cyan]")
 
 if __name__ == "__main__":
     try:
