@@ -54,7 +54,7 @@ DROP_DATA_URI_IMAGES = True
 console = Console()
 
 # ═══════════════════════════════════════════════════════════════
-# PROCESSAMENTO HTML - LÓGICA DO X.PY (100% FUNCIONAL)
+# PROCESSAMENTO HTML
 # ═══════════════════════════════════════════════════════════════
 
 def is_tag(o): 
