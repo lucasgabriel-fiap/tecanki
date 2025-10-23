@@ -26,7 +26,7 @@ O TECANKI é um bot que captura questões e comentários do site TEC Concursos e
 1. Python 3.7+
 2. Anki Desktop instalado e rodando
 3. AnkiConnect addon: https://ankiweb.net/shared/info/2055492159
-4. Google Chrome ou Microsoft Edge instalado
+4. Google Chrome instalado
 
 ### Dependências
 ```bash
