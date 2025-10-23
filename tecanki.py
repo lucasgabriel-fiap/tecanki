@@ -623,7 +623,6 @@ def main():
     console.print("\n")
     exibir_relatorio(stats)
     
-    console.print("\n[cyan]💡 Navegador permanece aberto. Feche manualmente quando quiser.[/cyan]")
 
 if __name__ == "__main__":
     try:
