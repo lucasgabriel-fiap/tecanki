@@ -79,7 +79,7 @@ def text_with_br(node: Tag) -> str:
     return out.strip("\n")
 
 def normalize_mathjax(soup: BeautifulSoup):
-    """Converte MathJax para LaTeX - LÓGICA DO X.PY"""
+    """Converte MathJax para LaTeX"""
     for sc in list(soup.select('script[type^="math/tex"]')):
         tex = (sc.string or sc.get_text() or "").strip()
         if not tex:
@@ -149,7 +149,7 @@ def style_dict_to_str(d: dict) -> str:
     return "; ".join(parts)
 
 def filter_inline_style(style_value: str) -> str:
-    """Filtra propriedades CSS - LÓGICA DO X.PY"""
+    """Filtra propriedades CSS"""
     d = parse_style_to_dict(style_value)
     for bad in list(d.keys()):
         if bad in BLOCKED_PROPS:
@@ -174,7 +174,7 @@ TABLE_ALLOWED_ATTRS = {
 }
 
 def clean_noise(soup: BeautifulSoup, preserve_classes: bool = False):
-    """Remove ruído e elementos desnecessários - LÓGICA DO X.PY"""
+    """Remove ruído e elementos desnecessários"""
     for c in soup.find_all(string=lambda s: isinstance(s, Comment)): 
         c.extract()
     for s in list(soup.find_all("script")): 
@@ -184,14 +184,13 @@ def clean_noise(soup: BeautifulSoup, preserve_classes: bool = False):
             el.decompose()
 
     for tag in list(soup.find_all(True)):
-        # ----- REMOÇÃO DE IMAGENS COM LINK GIGANTE OU DATA URI -----
+        # Remoção de imagens com link gigante ou data URI
         if tag.name == "img":
             src = (tag.get("src") or "").strip()
             if (DROP_DATA_URI_IMAGES and src.lower().startswith("data:")) or (len(src) > MAX_IMG_URL_CHARS):
                 tag.decompose()
                 continue
 
-        # classes – por padrão removo; se quiser manter, passe preserve_classes=True
         if not preserve_classes and "class" in tag.attrs:
             del tag.attrs["class"]
 
@@ -207,152 +206,122 @@ def clean_noise(soup: BeautifulSoup, preserve_classes: bool = False):
             "pre","p","ul","ol","li","blockquote","strong","em","i","b","u","sup","sub",
             "div","span","br"
         ):
-            allowed_attrs = {"style","align","id","width","height"}
+            allowed_attrs = {"style","id"}
         else:
-            tag.unwrap()
-            continue
+            allowed_attrs = {"style","id"}
 
-        # <span> sem utilidade vira texto (a menos que tenha style/align/id)
-        if tag.name == "span":
-            if not any(a in tag.attrs for a in ("style","align","id")):
-                tag.unwrap()
-                continue
+        to_remove = [k for k in tag.attrs if k not in allowed_attrs]
+        for k in to_remove:
+            del tag.attrs[k]
 
-        # filtra estilo inline
         if "style" in tag.attrs:
-            st = filter_inline_style(tag.get("style",""))
-            if st: tag["style"] = st
-            else: del tag.attrs["style"]
+            tag.attrs["style"] = filter_inline_style(tag.attrs["style"])
 
-        # preserva atributos úteis (colspan/rowspan/etc.)
-        for attr in list(tag.attrs.keys()):
-            if attr not in allowed_attrs:
-                del tag.attrs[attr]
-
-def extract_question_and_choices(soup: BeautifulSoup) -> str:
-    """Extrai questão e alternativas de forma estruturada - LÓGICA DO X.PY"""
-    out_parts = []
-
-    container = soup.select_one("article.questao-enunciado")
-    if not container:
-        return str(soup.body or soup)
-
-    # Enunciado
-    enunciado = container.select_one("div.questao-enunciado-texto")
-    if enunciado:
-        enun = BeautifulSoup(str(enunciado), "lxml")
-        convert_texto_monospace_to_pre(enun)
-        normalize_mathjax(enun)
-        clean_noise(enun)
-        inner_html = "".join(
-            str(ch) for ch in (enun.body or enun).children
-            if not (is_str(ch) and str(ch).strip() == "")
-        ).strip()
-        out_parts.append(inner_html)
-
-    # Alternativas
-    ul = container.select_one("ul.questao-enunciado-alternativas")
-    if ul:
-        itens = []
-        for li in ul.find_all("li", recursive=False):
-            letra_span = li.select_one(".questao-enunciado-alternativa-opcao label")
-            letra = letra_span.get_text(strip=True) if letra_span else ""
-
-            texto_div = li.select_one(".questao-enunciado-alternativa-texto")
-            if texto_div:
-                tx = BeautifulSoup(str(texto_div), "lxml")
-                convert_texto_monospace_to_pre(tx)
-                normalize_mathjax(tx)
-                clean_noise(tx)
-                texto_inner = "".join(
-                    str(ch) for ch in (tx.body or tx).children
-                    if not (is_str(ch) and str(ch).strip() == "")
-                ).strip()
-                itens.append(f"  <li>{letra} {texto_inner}</li>")
-        if itens:
-            out_parts.append("<ul>\n" + "\n".join(itens) + "\n</ul>")
-
-    return "\n".join(p for p in out_parts if p)
-
-def processar_html(html: str) -> str:
-    """Processa HTML usando a LÓGICA DO X.PY que funciona perfeitamente"""
-    if not html or COMENTARIO_INDISPONIVEL in html:
-        return html
-    
-    if not html.strip():
-        return "ERRO: O HTML está vazio."
-    
-    try:
-        # USA LXML como o x.py!!!
-        soup = BeautifulSoup(html, "lxml")
-        convert_texto_monospace_to_pre(soup)
-        normalize_mathjax(soup)
-
-        # Tenta extrair questão estruturada
-        html_final = extract_question_and_choices(soup).strip()
-        
-        # Se não conseguiu extrair, tenta comentário
-        if not html_final:
-            comentario = soup.select_one("div.questao-complementos-comentario-conteudo-texto")
-            if comentario:
-                cm = BeautifulSoup(str(comentario), "lxml")
-                convert_texto_monospace_to_pre(cm)
-                normalize_mathjax(cm)
-                clean_noise(cm)
-                html_final = "".join(str(ch) for ch in (cm.body or cm).children)
-
-        if html_final:
-            final_soup = BeautifulSoup(html_final, "lxml")
-            normalize_mathjax(final_soup)
-            clean_noise(final_soup)
-            inner = "".join(str(ch) for ch in (final_soup.body or final_soup).children).strip()
-            # Adiciona wrapper com estilos como o x.py
-            return f'<div style="line-height:1.6; font-size:16px; max-width:100%;">{inner}</div>'
+def extract_questao_alternativas(soup: BeautifulSoup) -> str:
+    """Extrai questão e alternativas de forma estruturada"""
+    output_parts = []
+    for el in soup.find_all(True, recursive=False):
+        if el.name in ("style",):
+            continue
+        if el.name == "hr" or (el.name in ("div","p") and "separador" in el.get("class",[])):
+            output_parts.append("<hr>")
         else:
-            return "ERRO: Nenhum container de questão ou comentário foi encontrado."
+            html_str = str(el)
+            if html_str.strip():
+                output_parts.append(html_str)
+    return "\n".join(output_parts)
+
+def wrap_em_div_estilizada(html_interno: str) -> str:
+    """Envolve conteúdo em div com estilos"""
+    return (
+        '<div style="font-family: Arial, sans-serif; font-size: 14px; '
+        'line-height: 1.6; color: #333; padding: 12px; '
+        'background: #fafafa; border-radius: 4px;">\n'
+        f'{html_interno}\n'
+        '</div>'
+    )
+
+def merge_consecutive_breaks(soup: BeautifulSoup):
+    """Remove quebras de linha consecutivas excessivas"""
+    for br in list(soup.find_all("br")):
+        nxt = br.next_sibling
+        if nxt and is_tag(nxt) and nxt.name == "br":
+            br.decompose()
+
+def processar_html(html_bruto: str) -> str:
+    """Processa HTML aplicando limpezas e formatações"""
+    if not html_bruto or html_bruto.strip() == "" or COMENTARIO_INDISPONIVEL in html_bruto:
+        return html_bruto
+
+    try:
+        soup = BeautifulSoup(html_bruto, "lxml")
     except Exception as e:
-        return f"Ocorreu um erro inesperado: {e}"
+        console.print(f"[red]Erro ao parsear HTML: {e}[/red]")
+        return html_bruto
+
+    normalize_mathjax(soup)
+    convert_texto_monospace_to_pre(soup)
+    clean_noise(soup, preserve_classes=False)
+
+    body = soup.body if soup.body else soup
+    if body.name == "body":
+        inner = extract_questao_alternativas(body)
+    else:
+        inner = str(body)
+
+    merge_consecutive_breaks(soup)
+
+    # Adiciona wrapper com estilos
+    final_html = wrap_em_div_estilizada(inner)
+    
+    return final_html
 
 # ═══════════════════════════════════════════════════════════════
-# ANKI CLIENT
+# CLIENTE ANKI
 # ═══════════════════════════════════════════════════════════════
 
 class AnkiClient:
     """Cliente para comunicação com AnkiConnect"""
     
-    def chamar_anki(self, action: str, params: dict = None) -> dict:
-        """Faz chamada à API do AnkiConnect"""
+    def __init__(self):
+        self.endpoint = ANKI_ENDPOINT
+        self.timeout = ANKI_TIMEOUT
+    
+    def invocar(self, acao: str, params: Optional[Dict] = None) -> Dict:
+        """Invoca uma ação no AnkiConnect"""
         payload = {
-            "action": action,
+            "action": acao,
             "version": ANKI_VERSION,
             "params": params or {}
         }
         
-        resp = requests.post(ANKI_ENDPOINT, json=payload, timeout=ANKI_TIMEOUT)
-        resp.raise_for_status()
+        try:
+            resposta = requests.post(self.endpoint, json=payload, timeout=self.timeout)
+            resposta.raise_for_status()
+            dados = resposta.json()
+            
+            if dados.get("error"):
+                raise Exception(dados["error"])
+            
+            return dados.get("result")
         
-        data = resp.json()
-        if len(data) != 2:
-            raise Exception(f"Resposta inválida do Anki: {data}")
-        if data.get("error"):
-            raise Exception(f"Erro no Anki: {data['error']}")
-        
-        return data.get("result")
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Erro de conexão: {e}")
     
     def testar_conexao(self) -> bool:
         """Testa conexão com AnkiConnect"""
         try:
-            self.chamar_anki("version")
+            self.invocar("version")
             return True
         except:
             return False
     
     def criar_deck(self, nome: str):
-        """Cria deck se não existir"""
-        self.chamar_anki("createDeck", {"deck": nome})
+        """Cria um deck no Anki"""
+        self.invocar("createDeck", {"deck": nome})
     
     def adicionar_nota(self, deck: str, frente: str, verso: str):
-        """Adiciona nota ao Anki - PERMITE DUPLICATAS"""
+        """Adiciona uma nota ao Anki"""
         nota = {
             "deckName": deck,
             "modelName": TIPO_NOTA,
@@ -361,71 +330,75 @@ class AnkiClient:
                 CAMPO_VERSO: verso
             },
             "options": {
-                "allowDuplicate": True,  # ✅ PERMITE DUPLICATAS
-                "duplicateScope": "deck"
-            },
-            "tags": ["tec-bot"]
+                "allowDuplicate": True
+            }
         }
-        
-        self.chamar_anki("addNote", {"note": nota})
+        self.invocar("addNote", {"note": nota})
 
 # ═══════════════════════════════════════════════════════════════
 # NAVEGADOR TEC
 # ═══════════════════════════════════════════════════════════════
 
 class NavegadorTEC:
-    """Controla navegação no site TEC Concursos"""
+    """Controla o navegador para automação do TEC Concursos"""
     
     def __init__(self):
         self.driver = None
     
     def iniciar(self):
-        """Inicia navegador"""
-        console.print("[cyan]🌐 Iniciando navegador...[/cyan]")
-        
-        options = webdriver.ChromeOptions()
-        options.add_argument("--start-maximized")
-        options.add_experimental_option("excludeSwitches", ["enable-logging"])
-        
+        """Inicia o navegador Chrome/Edge"""
         try:
-            service = Service(ChromeDriverManager().install())
-            self.driver = webdriver.Chrome(service=service, options=options)
-            console.print("[green]✅ Chrome iniciado[/green]")
-        except:
+            opcoes = webdriver.ChromeOptions()
+            opcoes.add_argument("--start-maximized")
+            opcoes.add_experimental_option("excludeSwitches", ["enable-logging"])
+            
             try:
-                service = Service(EdgeChromiumDriverManager().install())
-                self.driver = webdriver.Edge(service=service, options=options)
-                console.print("[green]✅ Edge iniciado[/green]")
-            except Exception as e:
-                raise Exception(f"Não foi possível iniciar navegador: {e}")
+                servico = Service(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=servico, options=opcoes)
+            except:
+                servico = Service(EdgeChromiumDriverManager().install())
+                self.driver = webdriver.Edge(service=servico, options=opcoes)
+            
+            console.print("[green]✅ Navegador iniciado[/green]")
+        
+        except Exception as e:
+            raise Exception(f"Erro ao iniciar navegador: {e}")
     
     def navegar_tec(self):
-        """Navega para o TEC"""
-        console.print("[cyan]🔍 Aguardando acesso ao TEC...[/cyan]")
-        console.print("[yellow]⚠️  Faça login e vá até uma questão[/yellow]")
-        self.driver.get("https://www.tecconcursos.com.br/login")
-        input("\n[Pressione ENTER quando estiver numa questão] ")
+        """Navega para o TEC Concursos"""
+        console.print("[cyan]🌐 Abrindo TEC Concursos...[/cyan]")
+        self.driver.get("https://www.tecconcursos.com.br/questoes")
+        console.print("[yellow]⏸️  Faça login e navegue até uma questão[/yellow]")
+        console.print("[yellow]⏸️  Pressione ENTER quando estiver pronto...[/yellow]")
+        input()
     
     def validar_questao(self) -> bool:
-        """Valida se está numa página de questão"""
+        """Valida se está em uma página de questão"""
         try:
-            self.driver.find_element(By.CSS_SELECTOR, "article[ng-if*='questao']")
+            wait = WebDriverWait(self.driver, TIMEOUT_ELEMENTO)
+            wait.until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, "div[tec-formatar-html='vm.questao.textoQuestao']")
+            ))
             return True
         except:
             return False
     
-    def capturar_questao(self) -> Optional[str]:
-        """Captura HTML da questão"""
+    def capturar_questao(self) -> str:
+        """Captura o HTML da questão"""
         try:
-            elemento = self.driver.find_element(By.CSS_SELECTOR, "article[ng-if*='questao']")
+            elemento = self.driver.find_element(
+                By.CSS_SELECTOR, 
+                "div[tec-formatar-html='vm.questao.textoQuestao']"
+            )
             return elemento.get_attribute("outerHTML")
-        except:
-            return None
+        except Exception as e:
+            raise Exception(f"Erro ao capturar questão: {e}")
     
     def abrir_comentario(self) -> bool:
-        """Abre o comentário (tecla O)"""
+        """Abre o comentário da questão pressionando 'O'"""
         try:
-            self.driver.find_element(By.TAG_NAME, "body").send_keys("o")
+            body = self.driver.find_element(By.TAG_NAME, "body")
+            body.send_keys("o")
             time.sleep(DELAY_COMENTARIO)
             
             self.driver.find_element(By.CSS_SELECTOR, "article[ng-if*=\"comentario\"]")
@@ -590,10 +563,10 @@ def main():
                 else:
                     console.print("[green]✅ Comentário capturado[/green]")
                 
-                console.print("[cyan]⏳ Processando HTML (lógica do x.py)...[/cyan]")
+                console.print("[cyan]⏳ Processando HTML...[/cyan]")
                 questao_limpa = processar_html(html_questao)
                 comentario_limpo = processar_html(html_comentario) if COMENTARIO_INDISPONIVEL not in html_comentario else COMENTARIO_INDISPONIVEL
-                console.print("[green]✅ HTML processado perfeitamente[/green]")
+                console.print("[green]✅ HTML processado[/green]")
                 
                 console.print("[cyan]⏳ Enviando para Anki...[/cyan]")
                 anki.adicionar_nota(deck, questao_limpa, comentario_limpo)
