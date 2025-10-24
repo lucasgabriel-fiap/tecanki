@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════
                   TECANKI - TEC CONCURSOS                     
               Automação de Cards para Anki                            
           VERSÃO COM COMENTÁRIOS DO FÓRUM 
-════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════
 """
 
 import time
@@ -527,7 +527,7 @@ class ForumManager:
     def formatar_para_anki(self, comentarios: list) -> str:
         """Formata comentários do fórum para HTML do Anki"""
         if not comentarios:
-            return '<div style="padding: 20px; text-align: center; color: #999; font-style: italic;">📭 Nenhum comentário disponível no fórum</div>'
+            return '<div style="padding: 20px; text-align: center; color: #999; font-style: italic;">🔭 Nenhum comentário disponível no fórum</div>'
         
         html_parts = ['<div class="forum-comentarios" style="font-family: Arial, sans-serif; margin-top: 20px;">']
         html_parts.append('<h2 style="color: #2196F3; border-bottom: 3px solid #2196F3; padding-bottom: 8px; margin-bottom: 20px;">💬 Comentários do Fórum ({} comentários)</h2>'.format(len(comentarios)))
@@ -661,12 +661,16 @@ class NavegadorTEC:
         try:
             service = Service(ChromeDriverManager().install())
             self.driver = webdriver.Chrome(service=service, options=options)
+            self.driver.set_page_load_timeout(999999)
+            self.driver.set_script_timeout(999999)
             console.print("[green]✅ Chrome iniciado[/green]")
             self.forum_manager = ForumManager(self.driver)
         except:
             try:
                 service = Service(EdgeChromiumDriverManager().install())
                 self.driver = webdriver.Edge(service=service, options=options)
+                self.driver.set_page_load_timeout(999999)
+                self.driver.set_script_timeout(999999)
                 console.print("[green]✅ Edge iniciado[/green]")
                 self.forum_manager = ForumManager(self.driver)
             except Exception as e:
@@ -674,7 +678,7 @@ class NavegadorTEC:
     
     def navegar_tec(self):
         """Navega para o TEC"""
-        console.print("[cyan]🔍 Aguardando acesso ao TEC...[/cyan]")
+        console.print("[cyan]🔐 Aguardando acesso ao TEC...[/cyan]")
         console.print("[yellow]⚠️  Faça login e vá até uma questão[/yellow]")
         self.driver.get("https://www.tecconcursos.com.br/login")
         input("\n[Pressione ENTER quando estiver numa questão] ")
@@ -926,7 +930,7 @@ def main():
                 if incluir_forum:
                     html_forum = nav.capturar_comentarios_forum()
                     
-                    if FORUM_INDISPONIVEL in html_forum or '📭' in html_forum:
+                    if FORUM_INDISPONIVEL in html_forum or '🔭' in html_forum:
                         stats["sem_forum"] += 1
                     else:
                         console.print("[green]✅ Fórum capturado[/green]")
@@ -937,7 +941,7 @@ def main():
                 comentario_limpo = processar_html(html_comentario) if COMENTARIO_INDISPONIVEL not in html_comentario else COMENTARIO_INDISPONIVEL
                 
                 # 5. MONTA VERSO COMBINADO
-                if incluir_forum and html_forum and FORUM_INDISPONIVEL not in html_forum and '📭' not in html_forum:
+                if incluir_forum and html_forum and FORUM_INDISPONIVEL not in html_forum and '🔭' not in html_forum:
                     separador = '''
                     <div style="margin: 30px 0; text-align: center;">
                         <hr style="border: none; border-top: 3px solid #2196F3; width: 80%; margin: 20px auto;">
