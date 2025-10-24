@@ -2,8 +2,11 @@
 
 Automação para criar cards no Anki a partir de questões do TEC Concursos.
 
-## 🎥 Demonstração
+## Demonstração
 [![Assista no YouTube](https://img.shields.io/badge/▶️_Assista_no_YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=Vzo3VwG3rps)
+
+
+## Atualização: Agora extrai todos os comentários do fórum mantendo a formatação original (cores, imagens, nomes).
 
 ## Descrição
 
