@@ -57,7 +57,7 @@ DROP_DATA_URI_IMAGES = True
 console = Console()
 
 # ═══════════════════════════════════════════════════════════════
-# PROCESSAMENTO HTML - LÓGICA DO X.PY (100% FUNCIONAL)
+# PROCESSAMENTO HTML
 # ═══════════════════════════════════════════════════════════════
 
 def is_tag(o): 
@@ -82,7 +82,7 @@ def text_with_br(node: Tag) -> str:
     return out.strip("\n")
 
 def normalize_mathjax(soup: BeautifulSoup):
-    """Converte MathJax para LaTeX - LÓGICA DO X.PY"""
+    """Converte MathJax para LaTeX"""
     for sc in list(soup.select('script[type^="math/tex"]')):
         tex = (sc.string or sc.get_text() or "").strip()
         if not tex:
@@ -152,7 +152,7 @@ def style_dict_to_str(d: dict) -> str:
     return "; ".join(parts)
 
 def filter_inline_style(style_value: str) -> str:
-    """Filtra propriedades CSS - LÓGICA DO X.PY"""
+    """Filtra propriedades CSS"""
     d = parse_style_to_dict(style_value)
     for bad in list(d.keys()):
         if bad in BLOCKED_PROPS:
@@ -177,7 +177,7 @@ TABLE_ALLOWED_ATTRS = {
 }
 
 def clean_noise(soup: BeautifulSoup, preserve_classes: bool = False):
-    """Remove ruído e elementos desnecessários - LÓGICA DO X.PY"""
+    """Remove ruído e elementos desnecessários"""
     for c in soup.find_all(string=lambda s: isinstance(s, Comment)): 
         c.extract()
     for s in list(soup.find_all("script")): 
@@ -227,7 +227,7 @@ def clean_noise(soup: BeautifulSoup, preserve_classes: bool = False):
                 del tag.attrs[attr]
 
 def extract_question_and_choices(soup: BeautifulSoup) -> str:
-    """Extrai questão e alternativas de forma estruturada - LÓGICA DO X.PY"""
+    """Extrai questão e alternativas de forma estruturada"""
     out_parts = []
 
     container = soup.select_one("article.questao-enunciado")
@@ -270,7 +270,7 @@ def extract_question_and_choices(soup: BeautifulSoup) -> str:
     return "\n".join(p for p in out_parts if p)
 
 def processar_html(html: str) -> str:
-    """Processa HTML usando a LÓGICA DO X.PY que funciona perfeitamente"""
+    """Processa HTML"""
     if not html or COMENTARIO_INDISPONIVEL in html:
         return html
     
