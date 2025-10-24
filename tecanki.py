@@ -4,6 +4,7 @@
 ════════════════════════════════════════════════════════════════
                   TECANKI - TEC CONCURSOS                     
               Automação de Cards para Anki                            
+             VERSÃO COM COMENTÁRIOS DO FÓRUM
 ════════════════════════════════════════════════════════════════
 """
 
@@ -41,6 +42,7 @@ TIMEOUT_ELEMENTO = 10
 DELAY_COMENTARIO = 2.0
 DELAY_NAVEGACAO = 2.5
 DELAY_RESPOSTA = 1.0
+DELAY_FORUM = 3.0  # ✨ NOVO: delay para carregar fórum
 
 TIPO_NOTA = "Basic"
 CAMPO_FRENTE = "Front"
@@ -205,7 +207,7 @@ def clean_noise(soup: BeautifulSoup, preserve_classes: bool = False):
             allowed_attrs = set(TABLE_ALLOWED_ATTRS)
         elif tag.name in (
             "pre","p","ul","ol","li","blockquote","strong","em","i","b","u","sup","sub",
-            "div","span","br"
+            "div","span","br","h1","h2","h3","h4","h5","h6","hr"
         ):
             allowed_attrs = {"style","align","id","width","height"}
         else:
@@ -361,13 +363,295 @@ class AnkiClient:
                 CAMPO_VERSO: verso
             },
             "options": {
-                "allowDuplicate": True,  # ✅ PERMITE DUPLICATAS
+                "allowDuplicate": True,
                 "duplicateScope": "deck"
             },
             "tags": ["tec-bot"]
         }
         
         self.chamar_anki("addNote", {"note": nota})
+
+# ═══════════════════════════════════════════════════════════════
+# GERENCIADOR DE COMENTÁRIOS DO FÓRUM 
+# ═══════════════════════════════════════════════════════════════
+
+class ForumManager:
+    """Gerencia extração e formatação de comentários do fórum TEC"""
+    
+    # Seletores CSS para extração
+    SELECTORS = {
+        "container": "ul.discussao-comentarios",
+        "comentario_item": "li",
+        "comentario_visivel": ".discussao-comentario-corpo",
+        "votos": ".discussao-comentario-nota-numero span",
+        "usuario_foto": ".post-cabecalho-perfil a img",
+        "usuario_nome": ".link-professor",
+        "usuario_pontos": ".votos .pontos",
+        "comentario_data": ".post-cabecalho-perfil-data",
+        "comentario_texto": ".discussao-comentario-post-texto",
+    }
+    
+    def __init__(self, driver):
+        self.driver = driver
+    
+    def abrir_forum(self) -> bool:
+        """Pressiona F para abrir comentários do fórum"""
+        try:
+            console.print("[cyan]⏳ Abrindo fórum...[/cyan]")
+            body = self.driver.find_element(By.TAG_NAME, "body")
+            body.send_keys("f")
+            time.sleep(DELAY_FORUM)
+            
+            # Verifica se o fórum carregou
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, self.SELECTORS["container"]))
+            )
+            
+            # Aguarda comentários carregarem (AngularJS)
+            time.sleep(2.0)
+            
+            console.print("[green]✅ Fórum carregado[/green]")
+            return True
+        except Exception as e:
+            console.print(f"[yellow]⚠️  Erro ao abrir fórum: {e}[/yellow]")
+            return False
+    
+    def extrair_comentarios(self) -> list:
+        """Extrai todos os comentários visíveis do fórum"""
+        comentarios = []
+        
+        try:
+            container = self.driver.find_element(By.CSS_SELECTOR, self.SELECTORS["container"])
+            itens = container.find_elements(By.CSS_SELECTOR, self.SELECTORS["comentario_item"])
+            
+            console.print(f"[cyan]📊 Processando {len(itens)} elementos...[/cyan]")
+            
+            for idx, item in enumerate(itens, 1):
+                try:
+                    # Verifica se comentário está visível (não oculto por votos negativos)
+                    try:
+                        item.find_element(By.CSS_SELECTOR, self.SELECTORS["comentario_visivel"])
+                    except:
+                        continue  # Comentário oculto, pular
+                    
+                    # Extrai dados do comentário
+                    comentario = self._extrair_dados_comentario(item)
+                    
+                    if comentario and comentario.get('texto_html'):
+                        comentarios.append(comentario)
+                        console.print(f"[green]  ✓ Comentário {len(comentarios)} extraído[/green]")
+                
+                except Exception as e:
+                    continue
+            
+            console.print(f"[green]✅ {len(comentarios)} comentários extraídos com sucesso[/green]")
+            return comentarios
+        
+        except Exception as e:
+            console.print(f"[red]❌ Erro ao extrair comentários: {e}[/red]")
+            return []
+    
+    def _extrair_dados_comentario(self, elemento) -> dict:
+        """Extrai dados de um comentário individual"""
+        try:
+            # Votos
+            try:
+                votos_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["votos"])
+                votos = votos_elem.text.strip()
+            except:
+                votos = "0"
+            
+            # Usuário - Nome
+            try:
+                nome_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["usuario_nome"])
+                usuario_nome = nome_elem.text.strip()
+            except:
+                usuario_nome = "Usuário"
+            
+            # Usuário - Foto
+            try:
+                foto_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["usuario_foto"])
+                usuario_foto = foto_elem.get_attribute("src") or ""
+                # Se for avatar padrão, usar placeholder
+                if not usuario_foto or "avatar.png" in usuario_foto:
+                    usuario_foto = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect fill='%23ddd' width='40' height='40'/%3E%3Ctext x='20' y='25' text-anchor='middle' fill='%23666' font-size='20'%3E👤%3C/text%3E%3C/svg%3E"
+            except:
+                usuario_foto = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect fill='%23ddd' width='40' height='40'/%3E%3Ctext x='20' y='25' text-anchor='middle' fill='%23666' font-size='20'%3E👤%3C/text%3E%3C/svg%3E"
+            
+            # Pontos do usuário
+            try:
+                pontos_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["usuario_pontos"])
+                usuario_pontos = pontos_elem.text.strip()
+            except:
+                usuario_pontos = "0 pontos"
+            
+            # Data
+            try:
+                data_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["comentario_data"])
+                data = data_elem.text.strip()
+            except:
+                data = ""
+            
+            # Texto do comentário (HTML completo)
+            try:
+                texto_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["comentario_texto"])
+                texto_html = texto_elem.get_attribute("innerHTML") or ""
+                
+                # Limpa o HTML usando BeautifulSoup
+                if texto_html:
+                    soup = BeautifulSoup(texto_html, "lxml")
+                    # Remove scripts e elementos indesejados
+                    for tag in soup.find_all(['script', 'style']):
+                        tag.decompose()
+                    texto_html = str(soup)
+            except:
+                texto_html = ""
+            
+            # Só retorna se tiver texto
+            if not texto_html or not texto_html.strip():
+                return None
+            
+            return {
+                "votos": votos,
+                "usuario": {
+                    "nome": usuario_nome,
+                    "foto": usuario_foto,
+                    "pontos": usuario_pontos
+                },
+                "data": data,
+                "texto_html": texto_html
+            }
+        
+        except Exception as e:
+            return None
+    
+    def formatar_para_anki(self, comentarios: list) -> str:
+        """Formata comentários do fórum para HTML do Anki"""
+        if not comentarios:
+            return '<div style="padding: 20px; text-align: center; color: #999; font-style: italic;">📭 Nenhum comentário disponível no fórum</div>'
+        
+        html_parts = ['<div class="forum-comentarios" style="font-family: Arial, sans-serif; margin-top: 20px;">']
+        html_parts.append('<h2 style="color: #2196F3; border-bottom: 3px solid #2196F3; padding-bottom: 8px; margin-bottom: 20px;">💬 Comentários do Fórum ({} comentários)</h2>'.format(len(comentarios)))
+        
+        # Ordena por votos (maior primeiro)
+        comentarios_ordenados = sorted(
+            comentarios, 
+            key=lambda x: self._extrair_numero_votos(x['votos']), 
+            reverse=True
+        )
+        
+        for idx, c in enumerate(comentarios_ordenados, 1):
+            # Determina cor baseada nos votos
+            votos_num = self._extrair_numero_votos(c['votos'])
+            if votos_num > 100:
+                cor_voto = '#4CAF50'  # Verde para muitos votos
+            elif votos_num > 20:
+                cor_voto = '#2196F3'  # Azul para votos médios
+            elif votos_num >= 0:
+                cor_voto = '#757575'  # Cinza para poucos votos
+            else:
+                cor_voto = '#F44336'  # Vermelho para negativos
+            
+            # Processa o HTML do comentário
+            texto_processado = self._processar_texto_comentario(c['texto_html'])
+            
+            html_parts.append(f'''
+            <div class="comentario" style="
+                border-left: 4px solid {cor_voto}; 
+                padding: 15px; 
+                margin: 15px 0; 
+                background: #fafafa;
+                border-radius: 6px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            ">
+                <!-- Cabeçalho -->
+                <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                    <img src="{c['usuario']['foto']}" 
+                         style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; border: 2px solid #ddd;"
+                         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'40\\' height=\\'40\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'40\\' height=\\'40\\'/%3E%3Ctext x=\\'20\\' y=\\'25\\' text-anchor=\\'middle\\' fill=\\'%23666\\' font-size=\\'20\\'%3E👤%3C/text%3E%3C/svg%3E'">
+                    <div style="flex: 1;">
+                        <div>
+                            <strong style="color: #333; font-size: 15px;">{c['usuario']['nome']}</strong>
+                            <span style="color: #999; font-size: 12px; margin-left: 8px;">• {c['data']}</span>
+                        </div>
+                        <div style="color: #666; font-size: 12px;">{c['usuario']['pontos']}</div>
+                    </div>
+                    <div style="
+                        background: {cor_voto}; 
+                        color: white; 
+                        padding: 6px 14px; 
+                        border-radius: 20px;
+                        font-weight: bold;
+                        font-size: 13px;
+                        min-width: 50px;
+                        text-align: center;
+                    ">
+                        ⬆ {c['votos']}
+                    </div>
+                </div>
+                
+                <!-- Conteúdo -->
+                <div style="
+                    line-height: 1.7; 
+                    color: #333;
+                    font-size: 15px;
+                    word-wrap: break-word;
+                ">
+                    {texto_processado}
+                </div>
+            </div>
+            ''')
+        
+        html_parts.append('</div>')
+        return ''.join(html_parts)
+    
+    def _processar_texto_comentario(self, html: str) -> str:
+        """Processa o HTML do texto do comentário"""
+        try:
+            soup = BeautifulSoup(html, "lxml")
+            
+            # Processa imagens
+            for img in soup.find_all('img'):
+                src = img.get('src', '')
+                # Remove data URIs muito grandes
+                if src.startswith('data:') and len(src) > MAX_IMG_URL_CHARS:
+                    img.decompose()
+                    continue
+                
+                # Ajusta estilo das imagens
+                style = img.get('style', '')
+                img['style'] = f"{style}; max-width: 100%; height: auto; display: block; margin: 10px 0; border-radius: 4px;"
+            
+            # Remove scripts
+            for script in soup.find_all('script'):
+                script.decompose()
+            
+            # Extrai conteúdo
+            body = soup.body if soup.body else soup
+            conteudo = ''.join(str(child) for child in body.children)
+            
+            return conteudo.strip()
+        except:
+            return html
+    
+    def _extrair_numero_votos(self, texto_votos: str) -> int:
+        """Extrai número inteiro dos votos"""
+        try:
+            # Remove caracteres não numéricos (exceto -)
+            numero = ''.join(c for c in texto_votos if c.isdigit() or c == '-')
+            return int(numero) if numero else 0
+        except:
+            return 0
+    
+    def fechar_forum(self):
+        """Fecha o fórum (pressiona ESC)"""
+        try:
+            body = self.driver.find_element(By.TAG_NAME, "body")
+            body.send_keys(Keys.ESCAPE)
+            time.sleep(1.0)
+            console.print("[green]✅ Fórum fechado[/green]")
+        except:
+            pass
 
 # ═══════════════════════════════════════════════════════════════
 # NAVEGADOR TEC
@@ -378,6 +662,7 @@ class NavegadorTEC:
     
     def __init__(self):
         self.driver = None
+        self.forum_manager = None
     
     def iniciar(self):
         """Inicia navegador"""
@@ -391,11 +676,17 @@ class NavegadorTEC:
             service = Service(ChromeDriverManager().install())
             self.driver = webdriver.Chrome(service=service, options=options)
             console.print("[green]✅ Chrome iniciado[/green]")
+            
+            # Inicializa ForumManager
+            self.forum_manager = ForumManager(self.driver)
         except:
             try:
                 service = Service(EdgeChromiumDriverManager().install())
                 self.driver = webdriver.Edge(service=service, options=options)
                 console.print("[green]✅ Edge iniciado[/green]")
+                
+                # Inicializa ForumManager
+                self.forum_manager = ForumManager(self.driver)
             except Exception as e:
                 raise Exception(f"Não foi possível iniciar navegador: {e}")
     
@@ -441,6 +732,29 @@ class NavegadorTEC:
         except:
             return COMENTARIO_INDISPONIVEL
     
+    def capturar_comentarios_forum(self) -> str:
+        """✨ Captura comentários do fórum"""
+        if not self.forum_manager:
+            return '<div style="color: #999; font-style: italic;">❌ ForumManager não inicializado</div>'
+        
+        try:
+            # Abre fórum
+            if not self.forum_manager.abrir_forum():
+                return '<div style="color: #999; font-style: italic;">⚠️ Não foi possível abrir o fórum</div>'
+            
+            # Extrai comentários
+            comentarios = self.forum_manager.extrair_comentarios()
+            
+            # Fecha fórum
+            self.forum_manager.fechar_forum()
+            
+            # Formata para Anki
+            return self.forum_manager.formatar_para_anki(comentarios)
+        
+        except Exception as e:
+            console.print(f"[red]❌ Erro ao capturar fórum: {e}[/red]")
+            return f'<div style="color: #999; font-style: italic;">❌ Erro: {e}</div>'
+    
     def responder_questao_c(self):
         """Responde a questão com alternativa C e confirma"""
         try:
@@ -481,16 +795,22 @@ def exibir_titulo():
     """Exibe título do programa"""
     console.print(Panel.fit(
         "[bold cyan]🤖 ANKI BOT - TEC CONCURSOS[/bold cyan]\n"
-        "[bold green]✨ VERSÃO CORRIGIDA - EXTRAÇÃO PERFEITA ✨[/bold green]\n",
+        "[bold green]VERSÃO COM COMENTÁRIOS DO FÓRUM[/bold green]\n",
         border_style="cyan"
     ))
 
-def solicitar_config() -> Tuple[str, int, str]:
+def solicitar_config() -> Tuple[str, int, str, bool]:
     """Solicita configurações do usuário"""
     console.print("\n[bold yellow]⚙️  CONFIGURAÇÃO[/bold yellow]\n")
     
     deck = Prompt.ask("[cyan]Nome do deck[/cyan]")
     quantidade = IntPrompt.ask("[cyan]Quantas questões processar?[/cyan]", default=10)
+    
+    # ✨ Pergunta sobre incluir fórum
+    console.print("\n[cyan]💬 Incluir comentários do fórum?[/cyan]")
+    console.print("  [yellow]Isso capturará todos os comentários dos usuários com imagens e formatação[/yellow]")
+    incluir_forum_input = Prompt.ask("[cyan]Incluir fórum?[/cyan]", choices=["s", "n"], default="s")
+    incluir_forum = (incluir_forum_input.lower() == "s")
     
     console.print("\n[cyan]Modo de navegação:[/cyan]")
     console.print("  [1] → Próxima sequencial (NÃO responde)")
@@ -499,7 +819,7 @@ def solicitar_config() -> Tuple[str, int, str]:
     modo = Prompt.ask("[cyan]Escolha[/cyan]", choices=["1", "2"], default="1")
     modo_nav = "proxima" if modo == "1" else "aleatoria"
     
-    return deck, quantidade, modo_nav
+    return deck, quantidade, modo_nav, incluir_forum
 
 def exibir_relatorio(stats: dict):
     """Exibe relatório final"""
@@ -513,6 +833,8 @@ def exibir_relatorio(stats: dict):
     tabela.add_row("❌ Erros", f"[red]{stats['erros']}[/red]")
     tabela.add_row("⏱️  Tempo", stats['tempo'])
     tabela.add_row("📦 Deck", stats['deck'])
+    if stats.get('forum'):
+        tabela.add_row("💬 Fórum", "[green]✅ Incluído[/green]")
     
     console.print(Panel(tabela, title="[bold green]✅ CONCLUÍDO![/bold green]", border_style="green"))
 
@@ -526,7 +848,7 @@ def main():
     
     exibir_titulo()
     
-    deck, quantidade, modo = solicitar_config()
+    deck, quantidade, modo, incluir_forum = solicitar_config()
     
     console.print("\n[cyan]🔍 Validando pré-requisitos...[/cyan]")
     anki = AnkiClient()
@@ -560,7 +882,14 @@ def main():
         console.print(f"[red]❌ Erro no navegador: {e}[/red]")
         return
     
-    stats = {"total": quantidade, "sucesso": 0, "sem_comentario": 0, "erros": 0, "deck": deck}
+    stats = {
+        "total": quantidade, 
+        "sucesso": 0, 
+        "sem_comentario": 0, 
+        "erros": 0, 
+        "deck": deck,
+        "forum": incluir_forum
+    }
     
     console.print("[bold green]🚀 PROCESSANDO QUESTÕES[/bold green]\n")
     
@@ -574,39 +903,63 @@ def main():
             console.print(f"\n[bold cyan]━━━ Questão {i}/{quantidade} ━━━[/bold cyan]")
             
             try:
+                # 1. CAPTURA QUESTÃO
                 console.print("[cyan]⏳ Capturando questão...[/cyan]")
                 html_questao = nav.capturar_questao()
                 if not html_questao:
                     raise Exception("Falha ao capturar questão")
                 console.print("[green]✅ Questão capturada[/green]")
                 
-                console.print("[cyan]⏳ Abrindo comentário (O)...[/cyan]")
+                # 2. CAPTURA COMENTÁRIO OFICIAL
+                console.print("[cyan]⏳ Abrindo comentário oficial...[/cyan]")
                 nav.abrir_comentario()
                 html_comentario = nav.capturar_comentario()
                 
                 if COMENTARIO_INDISPONIVEL in html_comentario:
                     stats["sem_comentario"] += 1
-                    console.print("[yellow]⚠️  Sem comentário[/yellow]")
+                    console.print("[yellow]⚠️  Sem comentário oficial[/yellow]")
                 else:
-                    console.print("[green]✅ Comentário capturado[/green]")
+                    console.print("[green]✅ Comentário oficial capturado[/green]")
                 
-                console.print("[cyan]⏳ Processando HTML (lógica do x.py)...[/cyan]")
+                # 3. ✨ CAPTURA COMENTÁRIOS DO FÓRUM (SE ATIVADO)
+                html_forum = ""
+                if incluir_forum:
+                    console.print("[cyan]⏳ Capturando comentários do fórum...[/cyan]")
+                    html_forum = nav.capturar_comentarios_forum()
+                    console.print("[green]✅ Fórum processado[/green]")
+                
+                # 4. PROCESSA HTML
+                console.print("[cyan]⏳ Processando HTML...[/cyan]")
                 questao_limpa = processar_html(html_questao)
                 comentario_limpo = processar_html(html_comentario) if COMENTARIO_INDISPONIVEL not in html_comentario else COMENTARIO_INDISPONIVEL
-                console.print("[green]✅ HTML processado perfeitamente[/green]")
                 
+                # 5. ✨ MONTA VERSO COMBINADO (COMENTÁRIO OFICIAL + FÓRUM)
+                if incluir_forum and html_forum and '📭' not in html_forum:
+                    # Adiciona separador visual bonito
+                    separador = '''
+                    <div style="margin: 30px 0; text-align: center;">
+                        <hr style="border: none; border-top: 3px solid #2196F3; width: 80%; margin: 20px auto;">
+                    </div>
+                    '''
+                    verso_final = f"{comentario_limpo}{separador}{html_forum}"
+                else:
+                    verso_final = comentario_limpo
+                
+                console.print("[green]✅ HTML processado[/green]")
+                
+                # 6. ENVIA PARA ANKI
                 console.print("[cyan]⏳ Enviando para Anki...[/cyan]")
-                anki.adicionar_nota(deck, questao_limpa, comentario_limpo)
+                anki.adicionar_nota(deck, questao_limpa, verso_final)
                 console.print(f"[green]✅ Card criado no deck '{deck}'[/green]")
                 
                 stats["sucesso"] += 1
                 
-                # RESPONDE APENAS se modo for ALEATÓRIA
+                # 7. RESPONDE APENAS se modo for ALEATÓRIA
                 if modo == "aleatoria":
                     console.print("[cyan]⏳ Respondendo questão (C)...[/cyan]")
                     nav.responder_questao_c()
                 
-                # Só navega se NÃO for a última questão
+                # 8. NAVEGA (exceto última questão)
                 if i < quantidade:
                     console.print("[cyan]⏳ Navegando para próxima...[/cyan]")
                     if not nav.navegar_proxima(modo):
@@ -625,6 +978,11 @@ def main():
     console.print("\n")
     exibir_relatorio(stats)
     
+    # Fecha navegador
+    try:
+        nav.fechar()
+    except:
+        pass
 
 if __name__ == "__main__":
     try:
