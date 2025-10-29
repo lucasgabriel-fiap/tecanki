@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-══════════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
                   TECANKI - TEC CONCURSOS                     
               Automação de Cards para Anki                            
           VERSÃO COM COMENTÁRIOS DO FÓRUM 
-══════════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 """
 
 import time
@@ -30,9 +30,9 @@ from rich.prompt import Prompt, IntPrompt
 from rich.table import Table
 from rich import box
 
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 # CONFIGURAÇÕES
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 
 ANKI_ENDPOINT = "http://127.0.0.1:8765"
 ANKI_TIMEOUT = 120
@@ -44,10 +44,6 @@ DELAY_NAVEGACAO = 2.5
 DELAY_RESPOSTA = 1.0
 DELAY_FORUM = 3.0
 
-TIPO_NOTA = "Basic"
-CAMPO_FRENTE = "Front"
-CAMPO_VERSO = "Back"
-
 COMENTARIO_INDISPONIVEL = "⚠️ Comentário não disponível para esta questão."
 FORUM_INDISPONIVEL = "⚠️ Fórum não disponível para esta questão."
 
@@ -56,9 +52,9 @@ DROP_DATA_URI_IMAGES = True
 
 console = Console()
 
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 # PROCESSAMENTO HTML
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 
 def is_tag(o): 
     return isinstance(o, Tag)
@@ -304,12 +300,17 @@ def processar_html(html: str) -> str:
     except Exception as e:
         return f"Ocorreu um erro inesperado: {e}"
 
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 # ANKI CLIENT
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 
 class AnkiClient:
     """Cliente para comunicação com AnkiConnect"""
+    
+    def __init__(self):
+        self.tipo_nota = None
+        self.campo_frente = None
+        self.campo_verso = None
     
     def chamar_anki(self, action: str, params: dict = None) -> dict:
         """Faz chamada à API do AnkiConnect"""
@@ -338,18 +339,60 @@ class AnkiClient:
         except:
             return False
     
+    def detectar_modelo_e_campos(self) -> bool:
+        """Detecta automaticamente o modelo Basic em português ou inglês"""
+        try:
+            # Lista todos os modelos disponíveis
+            modelos = self.chamar_anki("modelNames")
+            
+            # Configurações possíveis (português e inglês)
+            configuracoes = [
+                {"tipo": "Básico", "frente": "Frente", "verso": "Verso"},
+                {"tipo": "Basic", "frente": "Front", "verso": "Back"},
+                {"tipo": "Basico", "frente": "Frente", "verso": "Verso"},  # sem acento
+            ]
+            
+            for config in configuracoes:
+                if config["tipo"] in modelos:
+                    # Verifica os campos do modelo
+                    campos = self.chamar_anki("modelFieldNames", {"modelName": config["tipo"]})
+                    
+                    if config["frente"] in campos and config["verso"] in campos:
+                        self.tipo_nota = config["tipo"]
+                        self.campo_frente = config["frente"]
+                        self.campo_verso = config["verso"]
+                        
+                        console.print(f"[green]✅ Modelo detectado: '{self.tipo_nota}'[/green]")
+                        console.print(f"[green]   Campos: '{self.campo_frente}' / '{self.campo_verso}'[/green]")
+                        return True
+            
+            # Se não encontrou nenhum modelo válido
+            console.print("[yellow]⚠️  Modelos disponíveis no Anki:[/yellow]")
+            for modelo in modelos:
+                campos = self.chamar_anki("modelFieldNames", {"modelName": modelo})
+                console.print(f"   - {modelo}: {campos}")
+            
+            return False
+            
+        except Exception as e:
+            console.print(f"[red]❌ Erro ao detectar modelo: {e}[/red]")
+            return False
+    
     def criar_deck(self, nome: str):
         """Cria deck se não existir"""
         self.chamar_anki("createDeck", {"deck": nome})
     
     def adicionar_nota(self, deck: str, frente: str, verso: str):
         """Adiciona nota ao Anki - PERMITE DUPLICATAS"""
+        if not self.tipo_nota:
+            raise Exception("Modelo não foi detectado. Execute detectar_modelo_e_campos() primeiro.")
+        
         nota = {
             "deckName": deck,
-            "modelName": TIPO_NOTA,
+            "modelName": self.tipo_nota,
             "fields": {
-                CAMPO_FRENTE: frente,
-                CAMPO_VERSO: verso
+                self.campo_frente: frente,
+                self.campo_verso: verso
             },
             "options": {
                 "allowDuplicate": True,
@@ -360,9 +403,9 @@ class AnkiClient:
         
         self.chamar_anki("addNote", {"note": nota})
 
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 # GERENCIADOR DE COMENTÁRIOS DO FÓRUM
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 
 class ForumManager:
     """Gerencia extração e formatação de comentários do fórum TEC"""
@@ -639,9 +682,9 @@ class ForumManager:
         except Exception:
             pass  # Ignora erros ao fechar
 
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 # NAVEGADOR TEC
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 
 class NavegadorTEC:
     """Controla navegação no site TEC Concursos"""
@@ -678,7 +721,7 @@ class NavegadorTEC:
     
     def navegar_tec(self):
         """Navega para o TEC"""
-        console.print("[cyan]🔐 Aguardando acesso ao TEC...[/cyan]")
+        console.print("[cyan]🔑 Aguardando acesso ao TEC...[/cyan]")
         console.print("[yellow]⚠️  Faça login e vá até uma questão[/yellow]")
         self.driver.get("https://www.tecconcursos.com.br/login")
         input("\n[Pressione ENTER quando estiver numa questão] ")
@@ -791,9 +834,9 @@ class NavegadorTEC:
         if self.driver:
             self.driver.quit()
 
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 # INTERFACE
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 
 def exibir_titulo():
     """Exibe título do programa"""
@@ -842,9 +885,9 @@ def exibir_relatorio(stats: dict):
     
     console.print(Panel(tabela, title="[bold green]✅ CONCLUÍDO![/bold green]", border_style="green"))
 
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 # MAIN
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
 
 def main():
     """Função principal"""
@@ -863,6 +906,13 @@ def main():
         return
     
     console.print("[green]✅ AnkiConnect OK[/green]")
+    
+    # ✅ DETECTA MODELO E CAMPOS AUTOMATICAMENTE
+    if not anki.detectar_modelo_e_campos():
+        console.print("[red]❌ Não foi possível detectar modelo Basic/Básico[/red]")
+        console.print("[yellow]💡 Crie um modelo 'Basic' com campos 'Front'/'Back'[/yellow]")
+        console.print("[yellow]   ou 'Básico' com campos 'Frente'/'Verso' no Anki[/yellow]")
+        return
     
     try:
         anki.criar_deck(deck)
