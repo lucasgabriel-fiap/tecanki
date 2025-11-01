@@ -851,7 +851,7 @@ def solicitar_config() -> Tuple[str, int, str, bool]:
     console.print("\n[bold yellow]⚙️  CONFIGURAÇÃO[/bold yellow]\n")
     
     deck = Prompt.ask("[cyan]Nome do deck[/cyan]")
-    quantidade = IntPrompt.ask("[cyan]Quantas questões processar?[/cyan]", default=10)
+    quantidade_input = Prompt.ask("[cyan]Quantas questões processar? [padrão: 10][/cyan]")
     
     console.print("\n[cyan]💬 Incluir comentários do fórum?[/cyan]")
     console.print("  [yellow]Isso capturará todos os comentários dos usuários com imagens e formatação[/yellow]")
