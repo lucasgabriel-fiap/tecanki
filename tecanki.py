@@ -11,6 +11,7 @@
 import time
 import re
 import sys
+import os
 import requests
 from typing import Optional, Tuple, Dict
 from selenium import webdriver
@@ -44,11 +45,14 @@ DELAY_NAVEGACAO = 2.5
 DELAY_RESPOSTA = 1.0
 DELAY_FORUM = 3.0
 
-COMENTARIO_INDISPONIVEL = "⚠️ Comentário não disponível para esta questão."
-FORUM_INDISPONIVEL = "⚠️ Fórum não disponível para esta questão."
+COMENTARIO_INDISPONIVEL = "Comentário não disponível para esta questão."
+FORUM_INDISPONIVEL = "Fórum não disponível para esta questão."
 
 MAX_IMG_URL_CHARS = 300
 DROP_DATA_URI_IMAGES = True
+
+# Diretório para salvar sessão do navegador
+PERFIL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "navegador_sessao")
 
 console = Console()
 
@@ -342,19 +346,16 @@ class AnkiClient:
     def detectar_modelo_e_campos(self) -> bool:
         """Detecta automaticamente o modelo Basic em português ou inglês"""
         try:
-            # Lista todos os modelos disponíveis
             modelos = self.chamar_anki("modelNames")
             
-            # Configurações possíveis (português e inglês)
             configuracoes = [
                 {"tipo": "Básico", "frente": "Frente", "verso": "Verso"},
                 {"tipo": "Basic", "frente": "Front", "verso": "Back"},
-                {"tipo": "Basico", "frente": "Frente", "verso": "Verso"},  # sem acento
+                {"tipo": "Basico", "frente": "Frente", "verso": "Verso"},
             ]
             
             for config in configuracoes:
                 if config["tipo"] in modelos:
-                    # Verifica os campos do modelo
                     campos = self.chamar_anki("modelFieldNames", {"modelName": config["tipo"]})
                     
                     if config["frente"] in campos and config["verso"] in campos:
@@ -362,12 +363,11 @@ class AnkiClient:
                         self.campo_frente = config["frente"]
                         self.campo_verso = config["verso"]
                         
-                        console.print(f"[green]✅ Modelo detectado: '{self.tipo_nota}'[/green]")
-                        console.print(f"[green]   Campos: '{self.campo_frente}' / '{self.campo_verso}'[/green]")
+                        console.print(f"[green]Modelo detectado: '{self.tipo_nota}'[/green]")
+                        console.print(f"[green]Campos: '{self.campo_frente}' / '{self.campo_verso}'[/green]")
                         return True
             
-            # Se não encontrou nenhum modelo válido
-            console.print("[yellow]⚠️  Modelos disponíveis no Anki:[/yellow]")
+            console.print("[yellow]Modelos disponíveis no Anki:[/yellow]")
             for modelo in modelos:
                 campos = self.chamar_anki("modelFieldNames", {"modelName": modelo})
                 console.print(f"   - {modelo}: {campos}")
@@ -375,7 +375,7 @@ class AnkiClient:
             return False
             
         except Exception as e:
-            console.print(f"[red]❌ Erro ao detectar modelo: {e}[/red]")
+            console.print(f"[red]Erro ao detectar modelo: {e}[/red]")
             return False
     
     def criar_deck(self, nome: str):
@@ -398,7 +398,7 @@ class AnkiClient:
                 "allowDuplicate": True,
                 "duplicateScope": "deck"
             },
-            "tags": ["tec-bot"]
+            "tags": ["tec-concursos"]
         }
         
         self.chamar_anki("addNote", {"note": nota})
@@ -426,52 +426,49 @@ class ForumManager:
         self.driver = driver
     
     def abrir_forum(self) -> bool:
-        """Pressiona F para abrir comentários do fórum - COM TRATAMENTO DE ERRO"""
+        """Pressiona F para abrir comentários do fórum"""
         try:
-            console.print("[cyan]⏳ Tentando abrir fórum...[/cyan]")
+            console.print("[cyan]Abrindo forum...[/cyan]")
             body = self.driver.find_element(By.TAG_NAME, "body")
             body.send_keys("f")
             time.sleep(DELAY_FORUM)
             
-            # ✅ Tenta verificar se o fórum carregou (COM TIMEOUT)
             try:
                 WebDriverWait(self.driver, 5).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, self.SELECTORS["container"]))
                 )
-                time.sleep(2.0)  # Aguarda AngularJS
-                console.print("[green]✅ Fórum carregado[/green]")
+                time.sleep(2.0)
+                console.print("[green]Forum carregado[/green]")
                 return True
             except TimeoutException:
-                console.print("[yellow]⚠️  Fórum não disponível (timeout)[/yellow]")
+                console.print("[yellow]Forum não disponível[/yellow]")
                 return False
                 
         except Exception as e:
-            console.print(f"[yellow]⚠️  Erro ao abrir fórum: {e}[/yellow]")
+            console.print(f"[yellow]Erro ao abrir forum: {e}[/yellow]")
             return False
     
     def extrair_comentarios(self) -> list:
-        """Extrai todos os comentários visíveis do fórum - COM TRATAMENTO DE ERRO"""
+        """Extrai todos os comentários visíveis do fórum"""
         comentarios = []
         
         try:
-            # ✅ Verifica se container existe
             try:
                 container = self.driver.find_element(By.CSS_SELECTOR, self.SELECTORS["container"])
             except NoSuchElementException:
-                console.print("[yellow]⚠️  Container de comentários não encontrado[/yellow]")
+                console.print("[yellow]Container de comentários não encontrado[/yellow]")
                 return []
             
             itens = container.find_elements(By.CSS_SELECTOR, self.SELECTORS["comentario_item"])
             
             if not itens:
-                console.print("[yellow]⚠️  Nenhum comentário encontrado no fórum[/yellow]")
+                console.print("[yellow]Nenhum comentário encontrado no forum[/yellow]")
                 return []
             
-            console.print(f"[cyan]📊 Processando {len(itens)} elementos...[/cyan]")
+            console.print(f"[cyan]Processando {len(itens)} elementos...[/cyan]")
             
             for idx, item in enumerate(itens, 1):
                 try:
-                    # Verifica se comentário está visível
                     try:
                         item.find_element(By.CSS_SELECTOR, self.SELECTORS["comentario_visivel"])
                     except:
@@ -481,63 +478,57 @@ class ForumManager:
                     
                     if comentario and comentario.get('texto_html'):
                         comentarios.append(comentario)
-                        console.print(f"[green]  ✓ Comentário {len(comentarios)} extraído[/green]")
+                        console.print(f"[green]  Comentário {len(comentarios)} extraído[/green]")
                 
                 except Exception:
                     continue
             
             if comentarios:
-                console.print(f"[green]✅ {len(comentarios)} comentários extraídos[/green]")
+                console.print(f"[green]{len(comentarios)} comentários extraídos[/green]")
             else:
-                console.print("[yellow]⚠️  Nenhum comentário válido extraído[/yellow]")
+                console.print("[yellow]Nenhum comentário válido extraído[/yellow]")
             
             return comentarios
         
         except Exception as e:
-            console.print(f"[yellow]⚠️  Erro ao extrair comentários: {e}[/yellow]")
+            console.print(f"[yellow]Erro ao extrair comentários: {e}[/yellow]")
             return []
     
     def _extrair_dados_comentario(self, elemento) -> dict:
         """Extrai dados de um comentário individual"""
         try:
-            # Votos
             try:
                 votos_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["votos"])
                 votos = votos_elem.text.strip()
             except:
                 votos = "0"
             
-            # Usuário - Nome
             try:
                 nome_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["usuario_nome"])
                 usuario_nome = nome_elem.text.strip()
             except:
                 usuario_nome = "Usuário"
             
-            # Usuário - Foto
             try:
                 foto_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["usuario_foto"])
                 usuario_foto = foto_elem.get_attribute("src") or ""
                 if not usuario_foto or "avatar.png" in usuario_foto:
-                    usuario_foto = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect fill='%23ddd' width='40' height='40'/%3E%3Ctext x='20' y='25' text-anchor='middle' fill='%23666' font-size='20'%3E👤%3C/text%3E%3C/svg%3E"
+                    usuario_foto = ""
             except:
-                usuario_foto = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect fill='%23ddd' width='40' height='40'/%3E%3Ctext x='20' y='25' text-anchor='middle' fill='%23666' font-size='20'%3E👤%3C/text%3E%3C/svg%3E"
+                usuario_foto = ""
             
-            # Pontos do usuário
             try:
                 pontos_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["usuario_pontos"])
                 usuario_pontos = pontos_elem.text.strip()
             except:
                 usuario_pontos = "0 pontos"
             
-            # Data
             try:
                 data_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["comentario_data"])
                 data = data_elem.text.strip()
             except:
                 data = ""
             
-            # Texto do comentário
             try:
                 texto_elem = elemento.find_element(By.CSS_SELECTOR, self.SELECTORS["comentario_texto"])
                 texto_html = texto_elem.get_attribute("innerHTML") or ""
@@ -570,10 +561,10 @@ class ForumManager:
     def formatar_para_anki(self, comentarios: list) -> str:
         """Formata comentários do fórum para HTML do Anki"""
         if not comentarios:
-            return '<div style="padding: 20px; text-align: center; color: #999; font-style: italic;">🔭 Nenhum comentário disponível no fórum</div>'
+            return '<div style="padding: 20px; text-align: center; color: #999; font-style: italic;">Nenhum comentário disponível no fórum</div>'
         
         html_parts = ['<div class="forum-comentarios" style="font-family: Arial, sans-serif; margin-top: 20px;">']
-        html_parts.append('<h2 style="color: #2196F3; border-bottom: 3px solid #2196F3; padding-bottom: 8px; margin-bottom: 20px;">💬 Comentários do Fórum ({} comentários)</h2>'.format(len(comentarios)))
+        html_parts.append('<h2 style="color: #2196F3; border-bottom: 3px solid #2196F3; padding-bottom: 8px; margin-bottom: 20px;">Comentários do Fórum ({} comentários)</h2>'.format(len(comentarios)))
         
         comentarios_ordenados = sorted(
             comentarios, 
@@ -594,6 +585,13 @@ class ForumManager:
             
             texto_processado = self._processar_texto_comentario(c['texto_html'])
             
+            # Avatar: iniciais ou foto
+            iniciais = self._gerar_iniciais(c['usuario']['nome'])
+            if c['usuario']['foto']:
+                avatar_html = f'<img src="{c["usuario"]["foto"]}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; border: 2px solid #ddd;" onerror="this.outerHTML=\'<div style=\\\'width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; background: linear-gradient(135deg, #1a73e8, #1557b0); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px;\\\'>{iniciais}</div>\'">'
+            else:
+                avatar_html = f'<div style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; background: linear-gradient(135deg, #1a73e8, #1557b0); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px;">{iniciais}</div>'
+            
             html_parts.append(f'''
             <div class="comentario" style="
                 border-left: 4px solid {cor_voto}; 
@@ -604,13 +602,11 @@ class ForumManager:
                 box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             ">
                 <div style="display: flex; align-items: center; margin-bottom: 12px;">
-                    <img src="{c['usuario']['foto']}" 
-                         style="width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; border: 2px solid #ddd;"
-                         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'40\\' height=\\'40\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'40\\' height=\\'40\\'/%3E%3Ctext x=\\'20\\' y=\\'25\\' text-anchor=\\'middle\\' fill=\\'%23666\\' font-size=\\'20\\'%3E👤%3C/text%3E%3C/svg%3E'">
+                    {avatar_html}
                     <div style="flex: 1;">
                         <div>
                             <strong style="color: #333; font-size: 15px;">{c['usuario']['nome']}</strong>
-                            <span style="color: #999; font-size: 12px; margin-left: 8px;">• {c['data']}</span>
+                            <span style="color: #999; font-size: 12px; margin-left: 8px;">{c['data']}</span>
                         </div>
                         <div style="color: #666; font-size: 12px;">{c['usuario']['pontos']}</div>
                     </div>
@@ -624,7 +620,7 @@ class ForumManager:
                         min-width: 50px;
                         text-align: center;
                     ">
-                        ⬆ {c['votos']}
+                        +{c['votos']}
                     </div>
                 </div>
                 <div style="
@@ -640,6 +636,15 @@ class ForumManager:
         
         html_parts.append('</div>')
         return ''.join(html_parts)
+    
+    def _gerar_iniciais(self, nome: str) -> str:
+        """Gera iniciais do nome"""
+        partes = nome.split()
+        if len(partes) >= 2:
+            return (partes[0][0] + partes[-1][0]).upper()
+        elif partes:
+            return partes[0][0].upper()
+        return "U"
     
     def _processar_texto_comentario(self, html: str) -> str:
         """Processa o HTML do texto do comentário"""
@@ -674,13 +679,13 @@ class ForumManager:
             return 0
     
     def fechar_forum(self):
-        """Fecha o fórum (pressiona ESC) - COM TRATAMENTO DE ERRO"""
+        """Fecha o fórum (pressiona ESC)"""
         try:
             body = self.driver.find_element(By.TAG_NAME, "body")
             body.send_keys(Keys.ESCAPE)
             time.sleep(1.0)
         except Exception:
-            pass  # Ignora erros ao fechar
+            pass
 
 # ═══════════════════════════════════════════════════════════════════════
 # NAVEGADOR TEC
@@ -694,11 +699,21 @@ class NavegadorTEC:
         self.forum_manager = None
     
     def iniciar(self):
-        """Inicia navegador"""
-        console.print("[cyan]🌐 Iniciando navegador...[/cyan]")
+        """Inicia navegador com sessão salva"""
+        console.print("[cyan]Iniciando navegador...[/cyan]")
         
+        # Cria diretório de perfil se não existir
+        if not os.path.exists(PERFIL_DIR):
+            os.makedirs(PERFIL_DIR)
+            console.print("[yellow]Primeira execução - será necessário fazer login[/yellow]")
+        else:
+            console.print("[green]Sessão anterior encontrada[/green]")
+        
+        # Opções do Chrome com perfil persistente
         options = webdriver.ChromeOptions()
         options.add_argument("--start-maximized")
+        options.add_argument(f"--user-data-dir={PERFIL_DIR}")
+        options.add_argument("--profile-directory=Default")
         options.add_experimental_option("excludeSwitches", ["enable-logging"])
         
         try:
@@ -706,24 +721,43 @@ class NavegadorTEC:
             self.driver = webdriver.Chrome(service=service, options=options)
             self.driver.set_page_load_timeout(999999)
             self.driver.set_script_timeout(999999)
-            console.print("[green]✅ Chrome iniciado[/green]")
+            console.print("[green]Chrome iniciado[/green]")
             self.forum_manager = ForumManager(self.driver)
-        except:
+        except Exception as chrome_error:
+            console.print(f"[yellow]Chrome falhou: {chrome_error}[/yellow]")
             try:
+                # Edge com perfil persistente
+                edge_perfil = PERFIL_DIR + "_edge"
+                if not os.path.exists(edge_perfil):
+                    os.makedirs(edge_perfil)
+                
+                edge_options = webdriver.EdgeOptions()
+                edge_options.add_argument("--start-maximized")
+                edge_options.add_argument(f"--user-data-dir={edge_perfil}")
+                edge_options.add_argument("--profile-directory=Default")
+                
                 service = Service(EdgeChromiumDriverManager().install())
-                self.driver = webdriver.Edge(service=service, options=options)
+                self.driver = webdriver.Edge(service=service, options=edge_options)
                 self.driver.set_page_load_timeout(999999)
                 self.driver.set_script_timeout(999999)
-                console.print("[green]✅ Edge iniciado[/green]")
+                console.print("[green]Edge iniciado[/green]")
                 self.forum_manager = ForumManager(self.driver)
             except Exception as e:
                 raise Exception(f"Não foi possível iniciar navegador: {e}")
     
     def navegar_tec(self):
         """Navega para o TEC"""
-        console.print("[cyan]🔑 Aguardando acesso ao TEC...[/cyan]")
-        console.print("[yellow]⚠️  Faça login e vá até uma questão[/yellow]")
-        self.driver.get("https://www.tecconcursos.com.br/login")
+        console.print("[cyan]Acessando TEC Concursos...[/cyan]")
+        self.driver.get("https://www.tecconcursos.com.br/questoes")
+        time.sleep(3)
+        
+        # Verifica se já está logado
+        try:
+            self.driver.find_element(By.CSS_SELECTOR, "[class*='usuario'], [class*='perfil'], .avatar")
+            console.print("[green]Sessão ativa - já está logado[/green]")
+        except:
+            console.print("[yellow]Faça login no TEC Concursos[/yellow]")
+        
         input("\n[Pressione ENTER quando estiver numa questão] ")
     
     def validar_questao(self) -> bool:
@@ -743,28 +777,27 @@ class NavegadorTEC:
             return None
     
     def abrir_comentario(self) -> bool:
-        """Abre o comentário (tecla O) - COM TRATAMENTO DE ERRO"""
+        """Abre o comentário (tecla O)"""
         try:
-            console.print("[cyan]⏳ Tentando abrir comentário oficial...[/cyan]")
+            console.print("[cyan]Abrindo comentário oficial...[/cyan]")
             self.driver.find_element(By.TAG_NAME, "body").send_keys("o")
             time.sleep(DELAY_COMENTARIO)
             
-            # ✅ Verifica se comentário abriu (COM TIMEOUT)
             try:
                 WebDriverWait(self.driver, 5).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "article[ng-if*=\"comentario\"]"))
                 )
-                console.print("[green]✅ Comentário oficial aberto[/green]")
+                console.print("[green]Comentário oficial aberto[/green]")
                 return True
             except TimeoutException:
-                console.print("[yellow]⚠️  Comentário oficial não disponível[/yellow]")
+                console.print("[yellow]Comentário oficial não disponível[/yellow]")
                 return False
         except Exception as e:
-            console.print(f"[yellow]⚠️  Erro ao abrir comentário: {e}[/yellow]")
+            console.print(f"[yellow]Erro ao abrir comentário: {e}[/yellow]")
             return False
     
     def capturar_comentario(self) -> str:
-        """Captura o HTML do comentário - COM TRATAMENTO DE ERRO"""
+        """Captura o HTML do comentário"""
         try:
             elemento = self.driver.find_element(By.CSS_SELECTOR, "div[tec-formatar-html='vm.comentario.textoComentario']")
             return elemento.get_attribute("outerHTML")
@@ -777,25 +810,19 @@ class NavegadorTEC:
             return FORUM_INDISPONIVEL
         
         try:
-            # ✅ Tenta abrir fórum
             if not self.forum_manager.abrir_forum():
                 return FORUM_INDISPONIVEL
             
-            # ✅ Tenta extrair comentários
             comentarios = self.forum_manager.extrair_comentarios()
-            
-            # ✅ Fecha fórum (sempre, mesmo se houver erro)
             self.forum_manager.fechar_forum()
             
-            # ✅ Formata para Anki
             if comentarios:
                 return self.forum_manager.formatar_para_anki(comentarios)
             else:
                 return FORUM_INDISPONIVEL
         
         except Exception as e:
-            console.print(f"[yellow]⚠️  Erro ao capturar fórum: {e}[/yellow]")
-            # ✅ Garante que fecha o fórum mesmo em caso de erro
+            console.print(f"[yellow]Erro ao capturar forum: {e}[/yellow]")
             try:
                 self.forum_manager.fechar_forum()
             except:
@@ -810,9 +837,9 @@ class NavegadorTEC:
             time.sleep(DELAY_RESPOSTA)
             body.send_keys(Keys.RETURN)
             time.sleep(DELAY_RESPOSTA)
-            console.print("[green]✅ Questão respondida (C)[/green]")
+            console.print("[green]Questão respondida (C)[/green]")
         except Exception as e:
-            console.print(f"[yellow]⚠️  Não foi possível responder: {e}[/yellow]")
+            console.print(f"[yellow]Não foi possível responder: {e}[/yellow]")
     
     def navegar_proxima(self, modo: str):
         """Navega para próxima questão"""
@@ -841,27 +868,27 @@ class NavegadorTEC:
 def exibir_titulo():
     """Exibe título do programa"""
     console.print(Panel.fit(
-        "[bold cyan]🤖 ANKI BOT - TEC CONCURSOS[/bold cyan]\n"
-        "[bold green]VERSÃO COM COMENTÁRIOS DO FÓRUM[/bold green]\n",
+        "[bold cyan]TECANKI - TEC CONCURSOS[/bold cyan]\n"
+        "[green]Automação de Cards para Anki[/green]",
         border_style="cyan"
     ))
 
 def solicitar_config() -> Tuple[str, int, str, bool]:
     """Solicita configurações do usuário"""
-    console.print("\n[bold yellow]⚙️  CONFIGURAÇÃO[/bold yellow]\n")
+    console.print("\n[bold yellow]CONFIGURAÇÃO[/bold yellow]\n")
     
     deck = Prompt.ask("[cyan]Nome do deck[/cyan]")
     quantidade_input = Prompt.ask("[cyan]Quantas questões processar?[/cyan]")
     quantidade = int(quantidade_input) if quantidade_input.strip() else 10
     
-    console.print("\n[cyan]💬 Incluir comentários do fórum?[/cyan]")
-    console.print("  [yellow]Isso capturará todos os comentários dos usuários com imagens e formatação[/yellow]")
-    incluir_forum_input = Prompt.ask("[cyan]Incluir fórum?[/cyan]", choices=["s", "n"], default="s")
+    console.print("\n[cyan]Incluir comentários do fórum?[/cyan]")
+    console.print("  [dim]Captura todos os comentários dos usuários com imagens e formatação[/dim]")
+    incluir_forum_input = Prompt.ask("[cyan]Incluir forum? (s/n)[/cyan]", choices=["s", "n"], default="s")
     incluir_forum = (incluir_forum_input.lower() == "s")
     
     console.print("\n[cyan]Modo de navegação:[/cyan]")
-    console.print("  [1] → Próxima sequencial (NÃO responde)")
-    console.print("  [2] L Aleatória não resolvida (responde C)")
+    console.print("  [1] Próxima sequencial (não responde)")
+    console.print("  [2] Aleatória não resolvida (responde C)")
     
     modo = Prompt.ask("[cyan]Escolha[/cyan]", choices=["1", "2"], default="1")
     modo_nav = "proxima" if modo == "1" else "aleatoria"
@@ -874,17 +901,17 @@ def exibir_relatorio(stats: dict):
     tabela.add_column("Item", style="cyan bold")
     tabela.add_column("Valor", style="white")
     
-    tabela.add_row("📊 Total", str(stats['total']))
-    tabela.add_row("✅ Sucesso", f"[green]{stats['sucesso']}[/green]")
-    tabela.add_row("⚠️  Sem comentário", f"[yellow]{stats['sem_comentario']}[/yellow]")
-    tabela.add_row("⚠️  Sem fórum", f"[yellow]{stats['sem_forum']}[/yellow]")
-    tabela.add_row("❌ Erros", f"[red]{stats['erros']}[/red]")
-    tabela.add_row("⏱️  Tempo", stats['tempo'])
-    tabela.add_row("📦 Deck", stats['deck'])
+    tabela.add_row("Total", str(stats['total']))
+    tabela.add_row("Sucesso", f"[green]{stats['sucesso']}[/green]")
+    tabela.add_row("Sem comentário", f"[yellow]{stats['sem_comentario']}[/yellow]")
+    tabela.add_row("Sem forum", f"[yellow]{stats['sem_forum']}[/yellow]")
+    tabela.add_row("Erros", f"[red]{stats['erros']}[/red]")
+    tabela.add_row("Tempo", stats['tempo'])
+    tabela.add_row("Deck", stats['deck'])
     if stats.get('forum'):
-        tabela.add_row("💬 Fórum", "[green]✅ Ativado[/green]")
+        tabela.add_row("Forum", "[green]Ativado[/green]")
     
-    console.print(Panel(tabela, title="[bold green]✅ CONCLUÍDO![/bold green]", border_style="green"))
+    console.print(Panel(tabela, title="[bold green]CONCLUÍDO[/bold green]", border_style="green"))
 
 # ═══════════════════════════════════════════════════════════════════════
 # MAIN
@@ -898,28 +925,27 @@ def main():
     
     deck, quantidade, modo, incluir_forum = solicitar_config()
     
-    console.print("\n[cyan]🔍 Validando pré-requisitos...[/cyan]")
+    console.print("\n[cyan]Validando pré-requisitos...[/cyan]")
     anki = AnkiClient()
     
     if not anki.testar_conexao():
-        console.print("[red]❌ Anki não está rodando ou AnkiConnect não instalado[/red]")
+        console.print("[red]Anki não está rodando ou AnkiConnect não instalado[/red]")
         console.print("[yellow]Instale: https://ankiweb.net/shared/info/2055492159[/yellow]")
         return
     
-    console.print("[green]✅ AnkiConnect OK[/green]")
+    console.print("[green]AnkiConnect OK[/green]")
     
-    # ✅ DETECTA MODELO E CAMPOS AUTOMATICAMENTE
     if not anki.detectar_modelo_e_campos():
-        console.print("[red]❌ Não foi possível detectar modelo Basic/Básico[/red]")
-        console.print("[yellow]💡 Crie um modelo 'Basic' com campos 'Front'/'Back'[/yellow]")
-        console.print("[yellow]   ou 'Básico' com campos 'Frente'/'Verso' no Anki[/yellow]")
+        console.print("[red]Não foi possível detectar modelo Basic/Básico[/red]")
+        console.print("[yellow]Crie um modelo 'Basic' com campos 'Front'/'Back'[/yellow]")
+        console.print("[yellow]ou 'Básico' com campos 'Frente'/'Verso' no Anki[/yellow]")
         return
     
     try:
         anki.criar_deck(deck)
-        console.print(f"[green]✅ Deck '{deck}' pronto[/green]")
+        console.print(f"[green]Deck '{deck}' pronto[/green]")
     except Exception as e:
-        console.print(f"[red]❌ Erro ao criar deck: {e}[/red]")
+        console.print(f"[red]Erro ao criar deck: {e}[/red]")
         return
     
     nav = NavegadorTEC()
@@ -928,13 +954,13 @@ def main():
         nav.navegar_tec()
         
         if not nav.validar_questao():
-            console.print("[red]❌ Não está numa página de questão[/red]")
+            console.print("[red]Não está numa página de questão[/red]")
             return
         
-        console.print("[green]✅ Pronto para começar![/green]\n")
+        console.print("[green]Pronto para começar[/green]\n")
     
     except Exception as e:
-        console.print(f"[red]❌ Erro no navegador: {e}[/red]")
+        console.print(f"[red]Erro no navegador: {e}[/red]")
         return
     
     stats = {
@@ -947,7 +973,7 @@ def main():
         "forum": incluir_forum
     }
     
-    console.print("[bold green]🚀 PROCESSANDO QUESTÕES[/bold green]\n")
+    console.print("[bold green]PROCESSANDO QUESTÕES[/bold green]\n")
     
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), 
                   BarColumn(), TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
@@ -956,15 +982,15 @@ def main():
         task = progress.add_task(f"[cyan]Processando...", total=quantidade)
         
         for i in range(1, quantidade + 1):
-            console.print(f"\n[bold cyan]━━━ Questão {i}/{quantidade} ━━━[/bold cyan]")
+            console.print(f"\n[bold cyan]--- Questão {i}/{quantidade} ---[/bold cyan]")
             
             try:
                 # 1. CAPTURA QUESTÃO
-                console.print("[cyan]⏳ Capturando questão...[/cyan]")
+                console.print("[cyan]Capturando questão...[/cyan]")
                 html_questao = nav.capturar_questao()
                 if not html_questao:
                     raise Exception("Falha ao capturar questão")
-                console.print("[green]✅ Questão capturada[/green]")
+                console.print("[green]Questão capturada[/green]")
                 
                 # 2. CAPTURA COMENTÁRIO OFICIAL
                 comentario_abriu = nav.abrir_comentario()
@@ -974,25 +1000,25 @@ def main():
                     stats["sem_comentario"] += 1
                     html_comentario = COMENTARIO_INDISPONIVEL
                 else:
-                    console.print("[green]✅ Comentário oficial capturado[/green]")
+                    console.print("[green]Comentário oficial capturado[/green]")
                 
                 # 3. CAPTURA COMENTÁRIOS DO FÓRUM
                 html_forum = ""
                 if incluir_forum:
                     html_forum = nav.capturar_comentarios_forum()
                     
-                    if FORUM_INDISPONIVEL in html_forum or '🔭' in html_forum:
+                    if FORUM_INDISPONIVEL in html_forum:
                         stats["sem_forum"] += 1
                     else:
-                        console.print("[green]✅ Fórum capturado[/green]")
+                        console.print("[green]Forum capturado[/green]")
                 
                 # 4. PROCESSA HTML
-                console.print("[cyan]⏳ Processando HTML...[/cyan]")
+                console.print("[cyan]Processando HTML...[/cyan]")
                 questao_limpa = processar_html(html_questao)
                 comentario_limpo = processar_html(html_comentario) if COMENTARIO_INDISPONIVEL not in html_comentario else COMENTARIO_INDISPONIVEL
                 
                 # 5. MONTA VERSO COMBINADO
-                if incluir_forum and html_forum and FORUM_INDISPONIVEL not in html_forum and '🔭' not in html_forum:
+                if incluir_forum and html_forum and FORUM_INDISPONIVEL not in html_forum:
                     separador = '''
                     <div style="margin: 30px 0; text-align: center;">
                         <hr style="border: none; border-top: 3px solid #2196F3; width: 80%; margin: 20px auto;">
@@ -1002,30 +1028,30 @@ def main():
                 else:
                     verso_final = comentario_limpo
                 
-                console.print("[green]✅ HTML processado[/green]")
+                console.print("[green]HTML processado[/green]")
                 
                 # 6. ENVIA PARA ANKI
-                console.print("[cyan]⏳ Enviando para Anki...[/cyan]")
+                console.print("[cyan]Enviando para Anki...[/cyan]")
                 anki.adicionar_nota(deck, questao_limpa, verso_final)
-                console.print(f"[green]✅ Card criado no deck '{deck}'[/green]")
+                console.print(f"[green]Card criado no deck '{deck}'[/green]")
                 
                 stats["sucesso"] += 1
                 
                 # 7. RESPONDE (se modo aleatória)
                 if modo == "aleatoria":
-                    console.print("[cyan]⏳ Respondendo questão (C)...[/cyan]")
+                    console.print("[cyan]Respondendo questão (C)...[/cyan]")
                     nav.responder_questao_c()
                 
                 # 8. NAVEGA (exceto última questão)
                 if i < quantidade:
-                    console.print("[cyan]⏳ Navegando para próxima...[/cyan]")
+                    console.print("[cyan]Navegando para próxima...[/cyan]")
                     if not nav.navegar_proxima(modo):
                         raise Exception("Falha ao navegar")
-                    console.print("[green]✅ Próxima questão[/green]")
+                    console.print("[green]Próxima questão[/green]")
             
             except Exception as e:
                 stats["erros"] += 1
-                console.print(f"[red]❌ Erro: {e}[/red]")
+                console.print(f"[red]Erro: {e}[/red]")
             
             progress.update(task, advance=1)
     
@@ -1044,6 +1070,6 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        console.print("\n[yellow]⚠️  Interrompido pelo usuário[/yellow]")
+        console.print("\n[yellow]Interrompido pelo usuário[/yellow]")
     except Exception as e:
-        console.print(f"\n[red]❌ Erro fatal: {e}[/red]")
+        console.print(f"\n[red]Erro fatal: {e}[/red]")
