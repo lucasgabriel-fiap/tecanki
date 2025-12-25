@@ -34,7 +34,7 @@ O TECANKI é um bot que captura questões e comentários do site TEC Concursos e
 
 ### Dependências
 ```bash
-pip install -r requirements.txt
+pip install requests selenium webdriver-manager beautifulsoup4 lxml rich
 ```
 
 ## Como usar
